@@ -1,0 +1,27 @@
+{
+  "threadId": "t-12",
+  "runId": "r-12",
+  "messages": [],
+  "state": {
+    "currentPage": "TIN Registration",
+    "route": "/services/tin-register/apply",
+    "serviceId": "tin-register",
+    "serviceName": "TIN Registration",
+    "formFields": [
+      { "name": "fullName" },
+      { "name": "nationalId" },
+      { "name": "dob" },
+      { "name": "gender" },
+      { "name": "mothersMaidenName" },
+      { "name": "phone" },
+      { "name": "email" },
+      { "name": "tin" },
+      { "name": "lot" },
+      { "name": "street" },
+      { "name": "village" },
+      { "name": "region" },
+      { "name": "occupation" }
+    ]
+  },
+  "forwardedProps": { "trigger": "page_context" }
+}

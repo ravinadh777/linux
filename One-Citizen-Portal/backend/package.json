@@ -1,0 +1,41 @@
+{
+  "name": "@onecitizen/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "oneCitizen API (Express + Repository Pattern over JSON persistence).",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "lint": "eslint \"src/**/*.js\"",
+    "test": "vitest run",
+    "seed:reset": "node src/lib/seedReset.js",
+    "db:reset": "node scripts/db-reset.mjs",
+    "db:init": "node scripts/db-init.mjs",
+    "db:setup": "psql -U postgres -h 127.0.0.1 -f scripts/db-setup.sql"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.1.1",
+    "@onecitizen/shared": "file:../shared",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.22.0",
+    "pino": "^9.4.0",
+    "pino-http": "^10.3.0",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "nodemon": "^3.1.7",
+    "supertest": "^7.0.0",
+    "vitest": "^2.1.2"
+  }
+}

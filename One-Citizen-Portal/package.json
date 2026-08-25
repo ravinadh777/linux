@@ -1,0 +1,39 @@
+{
+  "name": "onecitizen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "oneCitizen — Guyana Government Digital Services Platform (reference implementation). Orchestration only: each app owns its own dependencies.",
+  "scripts": {
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "bootstrap:node": "node scripts/bootstrap.mjs --node-only",
+
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:all": "concurrently -n api,web,agent -c blue,green,magenta \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:agent\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:agent": "node scripts/run-agent.mjs",
+
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend run start",
+    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
+    "test": "npm --prefix backend run test && npm --prefix frontend run test",
+    "seed:reset": "npm --prefix backend run seed:reset",
+
+    "docker:build": "docker compose -f infra/docker/docker-compose.yml build",
+    "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infra/docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f infra/docker/docker-compose.yml logs -f",
+    "docker:ps": "docker compose -f infra/docker/docker-compose.yml ps",
+
+    "k8s:diff:dev": "kubectl kustomize infra/k8s/overlays/dev",
+    "k8s:apply:dev": "kubectl apply -k infra/k8s/overlays/dev",
+    "k8s:diff:prod": "kubectl kustomize infra/k8s/overlays/prod",
+    "k8s:apply:prod": "kubectl apply -k infra/k8s/overlays/prod"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

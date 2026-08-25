@@ -1,0 +1,12 @@
+{
+  "threadId": "t-09",
+  "runId": "r-09",
+  "messages": [
+    { "id": "m1", "role": "user", "content": "Hi, what can you help me with?" }
+  ],
+  "state": {
+    "currentPage": "Home",
+    "route": "/"
+  },
+  "forwardedProps": { "trigger": "user_message" }
+}

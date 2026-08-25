@@ -1,0 +1,14 @@
+{
+  "threadId": "t-04",
+  "runId": "r-04",
+  "messages": [
+    { "id": "m1", "role": "user", "content": "How much is the passport renewal fee and how long does processing take?" }
+  ],
+  "state": {
+    "currentPage": "Passport Renewal",
+    "route": "/services/passport-renew/apply",
+    "serviceId": "passport-renew",
+    "serviceName": "Passport Renewal"
+  },
+  "forwardedProps": { "trigger": "user_message" }
+}

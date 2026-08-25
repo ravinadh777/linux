@@ -1,0 +1,14 @@
+{
+  "threadId": "t-03",
+  "runId": "r-03",
+  "messages": [
+    { "id": "m1", "role": "user", "content": "What documents do I need to renew my passport?" }
+  ],
+  "state": {
+    "currentPage": "Passport Renewal",
+    "route": "/services/passport-renew/apply",
+    "serviceId": "passport-renew",
+    "serviceName": "Passport Renewal"
+  },
+  "forwardedProps": { "trigger": "user_message" }
+}

@@ -1,0 +1,36 @@
+# Local development overrides. Compose applies this automatically when you run compose
+# from this directory; the npm scripts pass -f explicitly and therefore do NOT pick it up:
+#
+#   cd infra/docker && docker compose up      # base + this override (dev)
+#   npm run docker:up                         # base only (production-like)
+#
+# What it changes: the API runs the json driver with the repo's data/ bind-mounted, so you
+# get a working stack with no database and edits to data/seed are visible immediately.
+
+services:
+  postgres:
+    # Still available for `PERSISTENCE_DRIVER=postgres` experiments, just not required.
+    profiles: [db]
+
+  backend:
+    depends_on: []
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      PERSISTENCE_DRIVER: json
+      DATA_DIR: /var/lib/onecitizen
+      AUTH_REQUIRED: "false"
+    volumes:
+      # Bind-mount the real data dir over the image's volume so seed/ and store/ are the
+      # repo's own files. Named volumes from the base file are replaced, not merged.
+      - ../../data:/var/lib/onecitizen
+    ports:
+      # Exposed for curl / API-client work against the API directly.
+      - "127.0.0.1:4000:4000"
+
+  askgov-agent:
+    environment:
+      LOG_LEVEL: debug
+      AUTH_REQUIRED: "false"
+    ports:
+      - "127.0.0.1:4100:4100"

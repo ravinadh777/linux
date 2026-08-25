@@ -1,0 +1,53 @@
+# Horizontal autoscaling. Requires metrics-server in the cluster.
+#
+# minReplicas matches the PDB minAvailable so autoscaling can never scale below the
+# disruption budget and deadlock node drains.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: onecitizen-backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: onecitizen-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: onecitizen-askgov-agent
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: onecitizen-askgov-agent
+  minReplicas: 3
+  maxReplicas: 12
+  metrics:
+    # Agent pods spend most of a run awaiting the LLM, so CPU is a poor signal — they go
+    # memory-heavy long before they go CPU-heavy. Scale on both.
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      # Long SSE streams: wait before removing capacity so in-flight runs can finish.
+      stabilizationWindowSeconds: 300

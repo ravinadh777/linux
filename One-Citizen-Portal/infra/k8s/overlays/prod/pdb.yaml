@@ -1,0 +1,33 @@
+# Keep the platform serving during voluntary disruptions (node drains, cluster upgrades).
+# Without these, a drain can evict every replica of a Deployment at once.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: onecitizen-backend
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: onecitizen-askgov-agent
+spec:
+  # Agent runs are long-lived SSE streams; evicting two of three at once would drop
+  # conversations mid-answer.
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: askgov-agent
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: onecitizen-frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend

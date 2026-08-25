@@ -1,0 +1,765 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Styling source: tailwind.config.js, whose tokens are extracted from the
+   approved prototype (One_Citizen_Portal_Dashboard.html).
+
+   This file holds three things only:
+     1. document-level rendering + scroll behaviour
+     2. the prototype's component classes, as @layer components
+     3. MUI visual neutralisation — MUI is kept for five behavioural primitives
+        (Dialog focus trap, Drawer, Popover/Menu positioning, Autocomplete
+        combobox a11y, Stepper) and must inherit these tokens, not its own theme.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  /* The page is the ONE vertical scroller. `min-height` (not `height`) so the
+     document grows; `height:100%` here previously combined with `min-height:100vh`
+     children to produce two vertical scrollbars on the registration form. */
+  html, body, #root { min-height: 100%; }
+
+  html {
+    /* `scrollbar-gutter: stable` was REMOVED here, and its removal is load-bearing.
+       It reserved a permanent gutter to stop a ~15px sideways shift between a short
+       and a tall page. But scrollbars are now hidden project-wide (see the block in
+       @layer components), so there is no bar to reserve space for and the gutter was
+       pure dead space on the right.
+
+       It was also actively causing the shift it was meant to prevent. MUI's scroll
+       lock measures `window.innerWidth - documentElement.clientWidth` and adds that
+       many pixels of `padding-right` to <body> whenever an overlay opens
+       (ModalManager, line 63). With the gutter reserved, that space was already
+       accounted for — so opening any dropdown double-counted it and jerked the whole
+       page left, leaving a blank strip down the right edge.
+
+       With zero-width scrollbars that measurement returns 0, the compensation
+       becomes 0, and opening a select no longer moves the layout at all. */
+    color-scheme: light;
+  }
+  html[data-theme='dark'] { color-scheme: dark; }
+
+  body {
+    @apply text-ink font-sans text-base antialiased;
+    margin: 0;
+    overflow-wrap: break-word;
+    /* NOTE: deliberately no document-level overflow-x clamp. `hidden` would make
+       body a scroll container and break every position:sticky descendant (top bar,
+       assistant panel); `clip` is worse — per the CSS Overflow spec, when one axis
+       is clip the other computes to clip too, which would stop the page scrolling
+       vertically. Horizontal overflow is fixed at source instead. */
+
+    /* ── The ambient backdrop the glass refracts ─────────────────────────────
+       Glass over a FLAT colour is indistinguishable from that colour, so every
+       frosted surface in the app needs something behind it with structure. This
+       is that something: two wide green washes plus a gold bloom over the page
+       colour, at very low contrast so it never competes with content.
+
+       `background-attachment: fixed` keeps it anchored to the viewport rather
+       than to the document, so it does not slide around as the content region
+       scrolls. Source of the gradient stops is `mesh()` in theme/tokens.js —
+       mirrored here because Tailwind cannot emit a JS-computed background. */
+    background-color: theme('colors.page');
+    background-image:
+      radial-gradient(900px circle at 18% -6%, rgba(255, 255, 255, 0.10), transparent 60%),
+      radial-gradient(1200px circle at 12% -8%, rgba(11, 110, 79, 0.13), transparent 55%),
+      radial-gradient(900px circle at 88% 4%, rgba(11, 110, 79, 0.09), transparent 55%),
+      radial-gradient(1000px circle at 72% 96%, rgba(252, 209, 22, 0.10), transparent 55%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+  html[data-theme='dark'] body {
+    @apply text-d-ink;
+    background-color: theme('colors.d-page');
+    background-image:
+      radial-gradient(900px circle at 18% -6%, rgba(230, 239, 233, 0.045), transparent 60%),
+      radial-gradient(1200px circle at 12% -8%, rgba(95, 207, 164, 0.10), transparent 55%),
+      radial-gradient(900px circle at 88% 4%, rgba(11, 110, 79, 0.20), transparent 55%),
+      radial-gradient(1000px circle at 72% 96%, rgba(252, 209, 22, 0.05), transparent 55%);
+  }
+
+  h1, h2, h3, h4, h5, h6 { text-wrap: balance; margin: 0; font-weight: 700; }
+  p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; }
+
+  /* One focus ring for the whole app: a crisp 2px outline, no soft halo. The halo
+     read as a blurry smear and, on text inputs, stacked on top of the field's own
+     focus border so the field appeared to have two rings. */
+  :where(a, button, [role='button'], [tabindex], summary):focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-card rounded-btn;
+  }
+  html[data-theme='dark'] :where(a, button, [role='button'], [tabindex]):focus-visible {
+    @apply ring-d-primary ring-offset-d-card;
+  }
+  /* Form fields show focus as their own 2px border (see .oc-input), so an extra
+     outline on the inner element would draw a second ring. */
+  input:focus, select:focus, textarea:focus { outline: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ═══════════════════════════════════════════════════════════════════════════
+     GLASS PRIMITIVES — the material every surface in the app is built from.
+     Nothing below this block invents its own fill, stroke or shadow; they all
+     compose one of these four. Values come from GLASS + SHADOW in theme/tokens.js.
+
+     Two things must be true at once for glass to read as glass:
+       1. translucent fill over the non-flat body backdrop (see @layer base)
+       2. layered, GREEN-TINTED shadow — a tight contact layer plus a wide
+          diffuse layer with negative spread so it pools under the card instead
+          of haloing sideways.
+
+     A third ingredient, an `inset 0 1px 0` top-edge highlight, was tried and
+     REMOVED: it painted a visible bright hairline along the top of every card,
+     button and icon chip, taking a colour cast from whatever it sat on (yellow on
+     the amber chips, green on the brand ones). The shadow alone carries the depth.
+
+     ── Why only `.oc-glass-chrome` blurs ────────────────────────────────────
+     `backdrop-filter` makes the compositor snapshot and blur the backdrop for
+     every element carrying it. At ~40 cards per page that is a real frame cost
+     on the low-end Android hardware most citizens use. So actual blur is
+     reserved for the handful of CHROME surfaces that overlap scrolling content
+     (top bar, sidebar, assistant rail, dialog, menu, popover, toast). Content
+     cards get fill + shadow and NO blur — the same material to the eye, at zero
+     GPU cost.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* Content surfaces. The default for anything holding text. */
+  .oc-glass {
+    background-color: theme('colors.glass.DEFAULT');
+    border: 1px solid theme('colors.glass.hairline');
+    box-shadow: theme('boxShadow.glass');
+  }
+  html[data-theme='dark'] .oc-glass {
+    background-color: theme('colors.d-glass.DEFAULT');
+    border-color: theme('colors.d-glass.hairline');
+    box-shadow: theme('boxShadow.glass-dark');
+  }
+
+  /* Denser text (long forms, tables, review summaries) sits on a higher opacity —
+     more headroom over the mesh's darkest point, so small type stays crisp. */
+  .oc-glass-strong {
+    background-color: theme('colors.glass.strong');
+    border: 1px solid theme('colors.glass.hairline');
+    box-shadow: theme('boxShadow.glass');
+  }
+  html[data-theme='dark'] .oc-glass-strong {
+    background-color: theme('colors.d-glass.strong');
+    border-color: theme('colors.d-glass.hairline');
+    box-shadow: theme('boxShadow.glass-dark');
+  }
+
+  /* Recessed wells: inputs at rest, review rows, table stripes. Inset shadow
+     rather than a drop shadow, so it reads as carved INTO the surface. */
+  .oc-glass-sunken {
+    background-color: theme('colors.glass.sunken');
+    border: 1px solid theme('colors.glass.hairline');
+    box-shadow: inset 0 1px 2px rgba(7, 64, 47, 0.05);
+  }
+  html[data-theme='dark'] .oc-glass-sunken {
+    background-color: theme('colors.d-glass.sunken');
+    border-color: theme('colors.d-glass.hairline');
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.30);
+  }
+
+  /* Chrome — the ONLY surfaces that carry real blur. See the note above. */
+  .oc-glass-chrome {
+    background-color: theme('colors.glass.strong');
+    -webkit-backdrop-filter: blur(theme('backdropBlur.chrome')) saturate(theme('backdropSaturate.glass'));
+    backdrop-filter: blur(theme('backdropBlur.chrome')) saturate(theme('backdropSaturate.glass'));
+  }
+  html[data-theme='dark'] .oc-glass-chrome {
+    background-color: theme('colors.d-glass.strong');
+  }
+
+  /* Elevation on interaction — paired with .oc-glass by the interactive classes. */
+  .oc-glass-raised { box-shadow: theme('boxShadow.glass-raised'); }
+  html[data-theme='dark'] .oc-glass-raised {
+    box-shadow: theme('boxShadow.glass-raised-dark');
+  }
+
+  /* ── Card — now a glass surface. Padding, radius and layout are unchanged, so
+        every existing `.oc-card` call site picks the new material up for free.
+        Padding stays TIGHTER (16/18 rather than 20/24 at large sizes): the previous
+        step-up left visible dead space inside cards whose content is a short list,
+        which read as the layout being loose rather than generous. */
+  .oc-card {
+    @apply oc-glass rounded-card p-4 sm:px-5 sm:py-[18px] flex flex-col;
+  }
+
+  /* Vertical rhythm, defined once so every screen matches:
+       oc-stack     — between top-level sections on a page (18px, 20px at xl)
+       oc-stack-sm  — inside a card, between blocks (12px)
+       oc-grid      — the standard grid gutter
+     A container `gap` rather than per-child margins, which is what removes the
+     collapsed- and doubled-margin bugs that made spacing look arbitrary from one
+     screen to the next. */
+  .oc-stack { @apply flex flex-col gap-[18px] xl:gap-5; }
+  .oc-stack-sm { @apply flex flex-col gap-3; }
+  .oc-grid { @apply grid gap-[18px] xl:gap-5; }
+
+  /* Interactive cards opt IN to lift. Applying it to every card made static panels
+     feel clickable, which is the fastest way to make a layout feel cheap.
+
+     The micro-interaction is deliberately restrained: a 2px rise, the fill stepping
+     up one opacity stop (so the surface appears to come FORWARD out of the mesh
+     rather than merely changing colour), and the shadow moving to the raised rung.
+     Transform and box-shadow only — both composited, so this stays at 60fps. */
+  .oc-card-interactive {
+    @apply transition-all duration-base ease-standard cursor-pointer;
+    will-change: transform;
+  }
+  .oc-card-interactive:hover {
+    @apply oc-glass-raised -translate-y-0.5;
+    background-color: theme('colors.glass.strong');
+    border-color: theme('colors.glass.hairline-strong');
+  }
+  .oc-card-interactive:active { @apply translate-y-0; }
+  html[data-theme='dark'] .oc-card-interactive:hover {
+    background-color: theme('colors.d-glass.strong');
+    border-color: theme('colors.d-glass.hairline-strong');
+  }
+
+  /* 12px below the head, not 14 — the head is a label for what follows, so it should
+     sit closer to its content than sections sit to each other. */
+  .oc-card-head { @apply flex items-center justify-between gap-3 mb-3; }
+  .oc-card-head h3, .oc-card-title {
+    @apply text-card-title font-bold text-ink m-0;
+  }
+  html[data-theme='dark'] .oc-card-head h3,
+  html[data-theme='dark'] .oc-card-title { @apply text-d-ink; }
+
+  /* ── Link button — the "View all" affordance on every card head ───────────── */
+  .oc-link {
+    @apply bg-transparent border-0 p-0 text-sm font-bold text-primary;
+  }
+  .oc-link:hover { @apply underline; }
+  html[data-theme='dark'] .oc-link { @apply text-d-primary; }
+
+  /* ── Buttons ─────────────────────────────────────────────────────────────── */
+  .oc-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-btn font-bold text-sm
+           px-[18px] min-h-[44px] border transition-colors duration-fast ease-standard
+           whitespace-nowrap;
+  }
+  /* Solid actions stay SOLID on purpose. A translucent primary button is the
+     classic glassmorphism mistake: the one element that must be unmistakable
+     becomes the one that dissolves into whatever is behind it. Glass here shows
+     up as a colour-matched lift, not as transparency. */
+  .oc-btn-primary {
+    @apply oc-btn bg-primary text-white border-transparent;
+    box-shadow: 0 2px 8px -1px rgba(11, 110, 79, 0.35);
+  }
+  .oc-btn-primary:hover {
+    @apply bg-primary-dark;
+    box-shadow: 0 6px 16px -2px rgba(11, 110, 79, 0.45);
+  }
+  .oc-btn-primary:active { box-shadow: 0 1px 4px rgba(11, 110, 79, 0.30); }
+  /* The secondary IS glass — it sits on cards and should belong to the surface. */
+  .oc-btn-secondary { @apply oc-btn oc-glass text-ink; }
+  .oc-btn-secondary:hover {
+    @apply text-primary;
+    background-color: theme('colors.tint');
+    border-color: theme('colors.glass.hairline-strong');
+    box-shadow: theme('boxShadow.glass-hover');
+  }
+  html[data-theme='dark'] .oc-btn-secondary { @apply text-d-ink; }
+  html[data-theme='dark'] .oc-btn-secondary:hover {
+    @apply text-d-primary;
+    background-color: theme('colors.d-tint');
+  }
+  /* Gold is the payment action — ink on gold measures 10.09:1. */
+  .oc-btn-gold {
+    @apply oc-btn bg-gold text-ink border-transparent rounded-pay;
+    box-shadow: 0 2px 8px -1px rgba(180, 150, 10, 0.40);
+  }
+  .oc-btn-gold:hover {
+    @apply bg-gold-hover;
+    box-shadow: 0 6px 16px -2px rgba(180, 150, 10, 0.50);
+  }
+  .oc-btn-danger {
+    @apply oc-btn bg-danger text-white border-transparent;
+    box-shadow: 0 2px 8px -1px rgba(193, 68, 58, 0.35);
+  }
+  .oc-btn-danger:hover { box-shadow: 0 6px 16px -2px rgba(193, 68, 58, 0.45); }
+  /* Disabled drops ALL elevation — a flat, unlit control reads as inert without
+     relying on colour alone. */
+  .oc-btn:disabled {
+    @apply bg-tint text-muted border-transparent cursor-not-allowed;
+    box-shadow: none;
+  }
+  html[data-theme='dark'] .oc-btn:disabled { @apply bg-d-tint text-d-muted; }
+  .oc-btn-sm { @apply min-h-[36px] px-3.5 text-sm; }
+  .oc-btn-lg { @apply min-h-[52px] px-6 text-lg; }
+
+  /* ── Service tile — the dashboard's signature element ──────────────────────
+        Sits INSIDE a glass card, so it starts as a barely-there subtle fill and
+        resolves into a full glass pane on hover. That progression is what makes a
+        grid of tiles read as one calm surface at rest and as distinct, pressable
+        objects under the cursor — rather than 11 competing boxes at all times. */
+  .oc-tile {
+    background-color: theme('colors.glass.subtle');
+    border: 1px solid theme('colors.glass.hairline');
+    @apply rounded-tile px-2 py-3.5 xl:py-4 text-center transition-all duration-fast ease-standard;
+    will-change: transform;
+  }
+  .oc-tile:hover {
+    @apply -translate-y-0.5;
+    background-color: theme('colors.glass.strong');
+    border-color: theme('colors.glass.hairline-strong');
+    box-shadow: theme('boxShadow.glass-hover');
+  }
+  .oc-tile:active { @apply translate-y-0; box-shadow: theme('boxShadow.glass'); }
+  .oc-tile-icon {
+    @apply w-[42px] h-[42px] rounded-tile text-primary grid place-items-center
+           mx-auto mb-2 text-[18px] transition-all duration-fast ease-standard;
+    background-color: theme('colors.tint');
+  }
+  /* The icon chip fills with brand green and gains its own lift — the tile's single
+     focal point, so the strongest state change in the component lives here. */
+  .oc-tile:hover .oc-tile-icon {
+    @apply bg-primary text-white;
+    box-shadow: 0 4px 12px -2px rgba(11, 110, 79, 0.45);
+  }
+  .oc-tile-label { @apply text-sm font-semibold text-ink leading-tight; }
+  html[data-theme='dark'] .oc-tile {
+    background-color: theme('colors.d-glass.subtle');
+    border-color: theme('colors.d-glass.hairline');
+  }
+  html[data-theme='dark'] .oc-tile:hover {
+    background-color: theme('colors.d-glass.strong');
+    border-color: theme('colors.d-glass.hairline-strong');
+    box-shadow: theme('boxShadow.glass-hover-dark');
+  }
+  html[data-theme='dark'] .oc-tile-icon { background-color: theme('colors.d-tint'); @apply text-d-primary; }
+  html[data-theme='dark'] .oc-tile-label { @apply text-d-ink; }
+
+  /* ── Chip / status pill ──────────────────────────────────────────────────── */
+  .oc-chip {
+    @apply inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1
+           text-micro font-bold whitespace-nowrap;
+  }
+  .oc-chip-dot { @apply w-[7px] h-[7px] rounded-full shrink-0; }
+  .oc-chip-ok    { @apply bg-ok-tint text-ok-text; }
+  .oc-chip-warn  { @apply bg-warn-tint text-warn-text; }
+  .oc-chip-danger{ @apply bg-danger-tint text-danger-text; }
+  .oc-chip-muted { @apply bg-tint text-muted; }
+
+  /* ── Sidebar item ────────────────────────────────────────────────────────── */
+  .oc-side-item {
+    @apply flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-btn
+           text-sm font-semibold text-ink bg-transparent border-0 relative
+           min-h-[44px] transition-colors duration-fast ease-standard;
+  }
+  .oc-side-item:hover { background-color: theme('colors.glass.subtle'); }
+  /* The active item is a glass pane with a green edge marker — it reads as the
+     selected tab of a physical set rather than as a tinted rectangle. */
+  .oc-side-item[aria-current='page'] {
+    @apply text-primary;
+    background-color: theme('colors.glass.strong');
+    box-shadow: theme('boxShadow.glass');
+  }
+  .oc-side-item[aria-current='page']::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 18px;
+    border-radius: 999px;
+    background-color: theme('colors.primary.DEFAULT');
+  }
+  .oc-side-item .oc-side-icon { @apply w-4 shrink-0 text-muted; }
+  .oc-side-item[aria-current='page'] .oc-side-icon { @apply text-primary; }
+  .oc-side-badge {
+    @apply ml-auto bg-danger text-white text-micro font-bold px-1.5 rounded-pill shrink-0;
+  }
+  .oc-side-sep { @apply h-px bg-line my-2.5 mx-1; }
+  html[data-theme='dark'] .oc-side-item { @apply text-d-ink; }
+  html[data-theme='dark'] .oc-side-item:hover { background-color: theme('colors.d-glass.subtle'); }
+  html[data-theme='dark'] .oc-side-item[aria-current='page'] {
+    @apply text-d-primary;
+    background-color: theme('colors.d-glass.strong');
+    box-shadow: theme('boxShadow.glass-dark');
+  }
+  html[data-theme='dark'] .oc-side-item[aria-current='page']::before {
+    background-color: theme('colors.d-primary');
+  }
+  html[data-theme='dark'] .oc-side-sep { @apply bg-d-line; }
+
+  /* ── Welcome banner ────────────────────────────────────────────────────────
+        Grows with the viewport rather than staying a fixed strip on a large monitor.
+        The subtle inner highlight stops the flat gradient reading as a coloured
+        rectangle at large sizes. */
+  .oc-banner {
+    @apply relative overflow-hidden rounded-banner text-white
+           bg-gradient-to-br from-primary-deep to-primary
+           px-5 py-5 sm:px-6 xl:px-8 xl:py-6
+           min-h-[112px] xl:min-h-[128px]
+           flex flex-col justify-center;
+  }
+  .oc-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(720px circle at 12% -30%, rgba(255, 255, 255, 0.14), transparent 55%),
+      radial-gradient(520px circle at 78% 130%, rgba(252, 209, 22, 0.10), transparent 55%);
+  }
+
+  /* ── Data table ──────────────────────────────────────────────────────────── */
+  .oc-table { @apply w-full border-collapse; }
+  .oc-table th {
+    @apply text-left text-micro font-bold text-muted tracking-wide
+           px-1 pb-2.5 border-b border-line;
+  }
+  .oc-table td { @apply px-1 py-3 text-sm border-b border-line align-middle; }
+  .oc-table tr:last-child td { @apply border-b-0; }
+  html[data-theme='dark'] .oc-table th,
+  html[data-theme='dark'] .oc-table td { @apply border-d-line; }
+  html[data-theme='dark'] .oc-table th { @apply text-d-muted; }
+
+  /* ── List row — used wherever a card lists records ───────────────────────── */
+  .oc-row {
+    @apply flex items-center justify-between gap-3 py-3 border-b border-line;
+  }
+  .oc-row:last-child { @apply border-b-0; }
+  .oc-row-title { @apply text-base font-bold text-ink; }
+  .oc-row-sub { @apply text-sm text-muted mt-0.5; }
+  html[data-theme='dark'] .oc-row { @apply border-d-line; }
+  html[data-theme='dark'] .oc-row-title { @apply text-d-ink; }
+  html[data-theme='dark'] .oc-row-sub { @apply text-d-muted; }
+
+  /* ── Form field ──────────────────────────────────────────────────────────────
+        A field is a WELL at rest (recessed into the card, inset shadow) and lifts to
+        an opaque, ringed surface on focus. That rest→focus transition is the whole
+        interaction model: you can see at a glance which field is live, and the
+        opaque focus fill guarantees the value you are typing is never competing
+        with the mesh behind it — the accessibility reason focus is not translucent. */
+  .oc-label { @apply block text-label font-semibold text-ink mb-1.5; }
+  .oc-input {
+    @apply oc-glass-sunken w-full min-h-[48px] px-3.5 text-base text-ink
+           rounded-btn transition-all duration-fast ease-standard;
+  }
+  .oc-input::placeholder { @apply text-muted opacity-70; }
+  .oc-input:hover:not(:focus):not(:disabled) { border-color: theme('colors.glass.hairline-strong'); }
+  /* Focus is a CRISP 2px border and an opaque fill — no soft ring.
+     A `0 0 0 3px` halo was tried here and removed: it read as a blurry smear around
+     the field while typing, which is the exact problem the base-layer note above
+     records the app having solved once already. The opaque fill still does the
+     accessibility job (the value never competes with the ambient mesh); the border
+     alone does the "this field is live" job, and does it more sharply. */
+  .oc-input:focus {
+    @apply border-primary border-2 outline-none;
+    background-color: theme('colors.card');
+    box-shadow: none;
+  }
+  .oc-input:disabled { @apply bg-tint text-muted cursor-not-allowed; box-shadow: none; }
+  .oc-input-error { @apply border-danger border-2; }
+  .oc-help { @apply text-sm text-muted mt-1.5; }
+  .oc-help-error { @apply text-sm text-danger-text font-semibold mt-1.5; }
+  html[data-theme='dark'] .oc-input { @apply text-d-ink; }
+  html[data-theme='dark'] .oc-input:focus {
+    @apply border-d-primary;
+    background-color: theme('colors.d-card');
+    box-shadow: none;
+  }
+  html[data-theme='dark'] .oc-label { @apply text-d-ink; }
+  html[data-theme='dark'] .oc-help { @apply text-d-muted; }
+
+  /* ── Page header ─────────────────────────────────────────────────────────────
+        The title scales up a step on large screens; the subtitle keeps a reading
+        measure so it never runs the full width of a wide monitor. */
+  .oc-page-title { @apply text-page-title xl:text-banner font-bold text-ink tracking-tight; }
+  .oc-page-sub { @apply text-base text-muted mt-1 max-w-prose; }
+  html[data-theme='dark'] .oc-page-title { @apply text-d-ink; }
+  html[data-theme='dark'] .oc-page-sub { @apply text-d-muted; }
+
+  /* Running prose keeps a comfortable measure regardless of the shell width.
+     Applied to explanatory paragraphs, not to data rows or tables. */
+  .oc-prose { @apply max-w-prose; }
+  .oc-prose-wide { @apply max-w-prose-wide; }
+
+  /* ── Empty state ─────────────────────────────────────────────────────────── */
+  .oc-empty { @apply text-center px-4 py-7 text-muted; }
+  .oc-empty-icon {
+    @apply w-11 h-11 mx-auto mb-3 rounded-full bg-tint text-primary grid place-items-center;
+  }
+  .oc-empty h4 { @apply text-base font-bold text-ink mb-1; }
+  .oc-empty p { @apply text-sm max-w-[380px] mx-auto; }
+
+  /* ── Scrollbars hidden project-wide ───────────────────────────────────────────
+     Every scrollbar in the app is zero-width: the page, the sidebar rail, the
+     AskGov transcript, menu lists, dialog bodies and the horizontal table strips.
+     Scrolling itself is completely untouched — wheel, trackpad, touch, keyboard
+     (arrows / PgUp / PgDn / Home / End), scroll-into-view and anchor jumps all
+     behave exactly as before. Only the painted bar is gone.
+
+     `*` is the right selector here, unlike the earlier version of this block which
+     used `*` to *style* bars 10px wide and made any incidental overflow look like a
+     deliberate scroll region. Hiding is safe to apply universally: on an element
+     that does not scroll, a zero-width bar is a no-op.
+
+     This also removes the layout shift when an overlay opens — see the note on
+     `html` above. MUI measures the scrollbar to compensate for hiding it; at zero
+     width there is nothing to compensate, so the page no longer jumps sideways.
+
+     TRADE-OFF, deliberate and requested: a hidden bar removes the visual hint that
+     a region scrolls, and on desktop it also removes the drag affordance. The two
+     inner regions that rely on it most (sidebar, AskGov transcript) keep
+     `overscroll-contain`, so the wheel stays inside them rather than silently
+     handing off to the page. */
+  * {
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* legacy Edge / IE */
+  }
+  *::-webkit-scrollbar {          /* Chrome, Safari, current Edge */
+    width: 0;
+    height: 0;
+  }
+
+  /* Retained as semantic markers so call sites still read as "this scrolls", and so
+     a visible bar can be restored in one place if that decision is ever revisited.
+     They intentionally carry no visual styling now. */
+  .oc-scroll,
+  .oc-no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .oc-scroll::-webkit-scrollbar,
+  .oc-no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* ── AskGov typing indicator ─────────────────────────────────────────────── */
+  .oc-typing-dot { animation: oc-typing 1.2s ease-in-out infinite; }
+  @keyframes oc-typing {
+    0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+  }
+
+  /* ── Skeleton shimmer ────────────────────────────────────────────────────── */
+  .oc-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+    animation: oc-shimmer 1.4s ease-in-out infinite;
+  }
+  html[data-theme='dark'] .oc-shimmer::after {
+    background-image: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 50%, transparent 100%);
+  }
+  @keyframes oc-shimmer { 100% { transform: translateX(100%); } }
+
+  /* ── Skip link — first tab stop, visible only on focus ───────────────────── */
+  .oc-skip-link {
+    @apply absolute left-2 z-skip-link px-4 py-3 rounded-btn bg-primary text-white
+           font-semibold no-underline;
+    top: -60px;
+    transition: top 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .oc-skip-link:focus { top: 8px; }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     GLASS ACCESSIBILITY + CAPABILITY FALLBACKS
+     Three separate guarantees. Each is a correctness requirement, not a polish
+     pass — glass that only works on a modern browser with default OS settings is
+     not shippable on a government portal.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* 1. NO `backdrop-filter` SUPPORT (older WebView, Firefox with the flag off).
+        Without this the chrome surfaces render as a flat 0.86 wash with the page
+        showing through unblurred — legible, but muddy, and the top bar stops
+        separating from the content scrolling under it. Going fully opaque is the
+        honest degradation: the layout and contrast are identical, only the
+        frosting is absent. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .oc-glass-chrome { background-color: theme('colors.card'); }
+    html[data-theme='dark'] .oc-glass-chrome { background-color: theme('colors.d-card'); }
+  }
+
+  /* 2. `prefers-reduced-transparency` — a real OS setting (Windows "Transparency
+        effects" off, macOS "Reduce transparency"). Citizens who turn it on are
+        usually doing so because translucency actively impairs their reading. Every
+        surface goes fully opaque and the blur is dropped; nothing moves or
+        reflows, because only colour and filter change. */
+  @media (prefers-reduced-transparency: reduce) {
+    .oc-glass,
+    .oc-glass-strong,
+    .oc-glass-chrome,
+    .oc-card { background-color: theme('colors.card'); }
+    .oc-glass-sunken,
+    .oc-input { background-color: theme('colors.tint'); }
+    .oc-tile { background-color: theme('colors.card'); }
+    .oc-glass-chrome {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    body { background-image: none; }
+
+    html[data-theme='dark'] .oc-glass,
+    html[data-theme='dark'] .oc-glass-strong,
+    html[data-theme='dark'] .oc-glass-chrome,
+    html[data-theme='dark'] .oc-card,
+    html[data-theme='dark'] .oc-tile { background-color: theme('colors.d-card'); }
+    html[data-theme='dark'] .oc-glass-sunken,
+    html[data-theme='dark'] .oc-input { background-color: theme('colors.d-tint'); }
+  }
+
+  /* 3. FORCED COLOURS (Windows High Contrast). The OS replaces our palette
+        wholesale; translucent fills and box-shadows are discarded, which would
+        leave every card edgeless and the whole layout as one undifferentiated
+        block. Restoring a real 1px border in the system colour puts the structure
+        back. */
+  @media (forced-colors: active) {
+    .oc-glass,
+    .oc-glass-strong,
+    .oc-glass-sunken,
+    .oc-glass-chrome,
+    .oc-card,
+    .oc-tile,
+    .oc-input { border: 1px solid CanvasText; }
+    .oc-side-item[aria-current='page']::before { background-color: Highlight; }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MUI neutralisation.
+   MUI remains ONLY for behaviour: Dialog (focus trap + aria), Drawer, Popover and
+   Menu (collision-aware positioning), Autocomplete (combobox a11y), Stepper.
+   Everything visual is stripped back so those primitives inherit the tokens above
+   rather than carrying a second, competing design system.
+   ───────────────────────────────────────────────────────────────────────────── */
+.MuiPaper-root {
+  background-image: none !important;
+  box-shadow: none !important;
+}
+/* Every portaled MUI surface is CHROME by the taxonomy in @layer components: it
+   floats over scrolling content, so it earns real blur. These are ~5 elements at
+   most and only while open, so the GPU cost is bounded — unlike putting blur on
+   every card. The `!important` is unavoidable: MUI ships these as inline-priority
+   `styleOverrides` on .MuiPaper-root. */
+.MuiDrawer-paper,
+.MuiPopover-paper,
+.MuiMenu-paper,
+.MuiAutocomplete-paper,
+.MuiDialog-paper {
+  background-color: rgba(255, 255, 255, 0.86) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.4) !important;
+  backdrop-filter: blur(16px) saturate(1.4) !important;
+  border: 1px solid rgba(11, 110, 79, 0.12) !important;
+  color: #1F2A24 !important;
+}
+.MuiPopover-paper, .MuiMenu-paper, .MuiAutocomplete-paper {
+  border-radius: 10px !important;
+  box-shadow: 0 2px 4px rgba(7, 64, 47, 0.06),
+              0 24px 48px -16px rgba(7, 64, 47, 0.20) !important;
+}
+.MuiDialog-paper {
+  border-radius: 14px !important;
+  box-shadow: 0 2px 4px rgba(7, 64, 47, 0.06),
+              0 32px 64px -20px rgba(7, 64, 47, 0.28) !important;
+}
+/* Same two fallbacks the component layer carries — a portaled surface must not be
+   the one place the app forgets to degrade. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .MuiDrawer-paper, .MuiPopover-paper, .MuiMenu-paper,
+  .MuiAutocomplete-paper, .MuiDialog-paper { background-color: #fff !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .MuiDrawer-paper, .MuiPopover-paper, .MuiMenu-paper,
+  .MuiAutocomplete-paper, .MuiDialog-paper {
+    background-color: #fff !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+/* Dim the page behind DIALOGS and the mobile DRAWER only.
+   `:not(.MuiBackdrop-invisible)` is the whole point of this selector. Menu, Select,
+   Popover and Autocomplete all mount a backdrop too, but purely as an invisible
+   click-catcher for outside-dismiss — Popover passes `invisible: true`, which MUI
+   implements as `background-color: transparent` plus that class. A blanket
+   `background-color … !important` here overrode the transparency, so opening any
+   dropdown washed the entire screen dark green. Dialogs and Drawer use a visible
+   backdrop, so they still dim. */
+.MuiBackdrop-root:not(.MuiBackdrop-invisible) {
+  background-color: rgba(7, 42, 31, 0.45) !important;
+  /* A light blur on the dimmed page is what makes a dialog read as being in FRONT
+     of the app rather than pasted onto it. Kept at 3px: enough to defocus the
+     background, cheap enough not to stutter the dialog's own fade-in. */
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .MuiBackdrop-root:not(.MuiBackdrop-invisible) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+html[data-theme='dark'] .MuiDrawer-paper,
+html[data-theme='dark'] .MuiPopover-paper,
+html[data-theme='dark'] .MuiMenu-paper,
+html[data-theme='dark'] .MuiAutocomplete-paper,
+html[data-theme='dark'] .MuiDialog-paper {
+  background-color: rgba(18, 32, 26, 0.88) !important;
+  border-color: rgba(230, 239, 233, 0.12) !important;
+  color: #E6EFE9 !important;
+}
+html[data-theme='dark'] .MuiPopover-paper,
+html[data-theme='dark'] .MuiMenu-paper,
+html[data-theme='dark'] .MuiAutocomplete-paper {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.40),
+              0 24px 48px -16px rgba(0, 0, 0, 0.65) !important;
+}
+html[data-theme='dark'] .MuiDialog-paper {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.40),
+              0 32px 64px -20px rgba(0, 0, 0, 0.75) !important;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-theme='dark'] .MuiDrawer-paper, html[data-theme='dark'] .MuiPopover-paper,
+  html[data-theme='dark'] .MuiMenu-paper, html[data-theme='dark'] .MuiAutocomplete-paper,
+  html[data-theme='dark'] .MuiDialog-paper { background-color: #12201A !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-theme='dark'] .MuiDrawer-paper, html[data-theme='dark'] .MuiPopover-paper,
+  html[data-theme='dark'] .MuiMenu-paper, html[data-theme='dark'] .MuiAutocomplete-paper,
+  html[data-theme='dark'] .MuiDialog-paper { background-color: #12201A !important; }
+}
+
+/* Menu / autocomplete options adopt the sidebar-item language. */
+.MuiMenuItem-root, .MuiAutocomplete-option {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  min-height: 44px !important;
+}
+.MuiMenuItem-root:hover,
+.MuiAutocomplete-option[aria-selected='true'],
+.MuiAutocomplete-option.Mui-focused {
+  background-color: #E4F1EA !important;
+}
+html[data-theme='dark'] .MuiMenuItem-root:hover,
+html[data-theme='dark'] .MuiAutocomplete-option.Mui-focused {
+  background-color: #16291F !important;
+}
+
+/* Stepper: connectors and labels in prototype colours. */
+.MuiStepConnector-line { border-color: #DCEAE3 !important; }
+.MuiStepLabel-label { font-family: inherit !important; font-size: 14px !important; color: #55655C !important; }
+.MuiStepLabel-label.Mui-active { color: #0B6E4F !important; font-weight: 700 !important; }
+.MuiStepLabel-label.Mui-completed { color: #1F2A24 !important; }
+.MuiStepIcon-root { color: #DCEAE3 !important; }
+.MuiStepIcon-root.Mui-active, .MuiStepIcon-root.Mui-completed { color: #0B6E4F !important; }
+html[data-theme='dark'] .MuiStepLabel-label { color: #93A89C !important; }
+html[data-theme='dark'] .MuiStepLabel-label.Mui-active { color: #5FCFA4 !important; }
+html[data-theme='dark'] .MuiStepIcon-root.Mui-active,
+html[data-theme='dark'] .MuiStepIcon-root.Mui-completed { color: #5FCFA4 !important; }
+html[data-theme='dark'] .MuiStepConnector-line { border-color: #22362C !important; }

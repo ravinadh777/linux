@@ -1,0 +1,20 @@
+{
+  "threadId": "t-02",
+  "runId": "r-02",
+  "messages": [
+    { "id": "m1", "role": "user", "content": "Please auto-fill my passport renewal form from my records." }
+  ],
+  "state": {
+    "currentPage": "Passport Renewal",
+    "route": "/services/passport-renew/apply",
+    "serviceId": "passport-renew",
+    "serviceName": "Passport Renewal",
+    "formFields": [
+      { "name": "surname" },
+      { "name": "givenNames" },
+      { "name": "priorPassportNo" },
+      { "name": "dob" }
+    ]
+  },
+  "forwardedProps": { "trigger": "user_message" }
+}

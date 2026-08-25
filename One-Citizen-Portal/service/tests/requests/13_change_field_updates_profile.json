@@ -1,0 +1,22 @@
+{
+  "threadId": "t-13",
+  "runId": "r-13",
+  "messages": [
+    { "id": "m1", "role": "user", "content": "Change my mobile number to +592 700 5555 and fill the driver's licence form." }
+  ],
+  "state": {
+    "currentPage": "Driver's Licence",
+    "route": "/services/driver-licence/apply",
+    "serviceId": "driver-licence",
+    "serviceName": "Driver's Licence",
+    "formFields": [
+      { "name": "fullName" },
+      { "name": "nationalId" },
+      { "name": "dob" },
+      { "name": "phone" },
+      { "name": "email" },
+      { "name": "region" }
+    ]
+  },
+  "forwardedProps": { "trigger": "user_message" }
+}

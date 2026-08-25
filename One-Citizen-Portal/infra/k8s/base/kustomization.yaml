@@ -1,0 +1,29 @@
+# Environment-agnostic base. Never apply this directly — apply an overlay:
+#
+#   kubectl apply -k infra/k8s/overlays/dev
+#
+# Image tags are deliberately `dev` placeholders here; each overlay pins the real tag via
+# `images:`, so a deploy is a tag bump rather than a manifest edit.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - postgres-statefulset.yaml
+  - postgres-service.yaml
+  - configmap.yaml
+  - secret.yaml
+  - backend.yaml
+  - frontend.yaml
+  - askgov-agent.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: onecitizen
+
+images:
+  - name: ravinadh/onecitizen-backend
+    newTag: dev
+  - name: ravinadh/onecitizen-frontend
+    newTag: dev
+  - name: ravinadh/onecitizen-askgov-agent
+    newTag: dev

@@ -1,0 +1,17 @@
+{
+  "threadId": "t-10",
+  "runId": "r-10",
+  "messages": [
+    { "id": "m1", "role": "user", "content": "I want to renew my passport." },
+    { "id": "m2", "role": "assistant", "content": "Sure — I can help with that. Would you like me to auto-fill the form from your records?" },
+    { "id": "m3", "role": "user", "content": "Yes please, fill it in." }
+  ],
+  "state": {
+    "currentPage": "Passport Renewal",
+    "route": "/services/passport-renew/apply",
+    "serviceId": "passport-renew",
+    "serviceName": "Passport Renewal",
+    "formFields": [ { "name": "surname" }, { "name": "givenNames" }, { "name": "priorPassportNo" } ]
+  },
+  "forwardedProps": { "trigger": "user_message" }
+}

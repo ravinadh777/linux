@@ -1,0 +1,58 @@
+# Dev cluster overlay — single replicas, debug logging, permissive auth.
+#
+#   kubectl apply -k infra/k8s/overlays/dev
+#   kubectl kustomize infra/k8s/overlays/dev     # render without applying
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: onecitizen-dev
+
+resources:
+  - ../../base
+  - namespace.yaml
+
+commonLabels:
+  app.kubernetes.io/environment: dev
+
+images:
+  - name: onecitizen/backend
+    newTag: dev
+  - name: onecitizen/frontend
+    newTag: dev
+  - name: onecitizen/askgov-agent
+    newTag: dev
+
+# Merged over the base ConfigMap; only these keys change.
+configMapGenerator:
+  - name: onecitizen-config
+    behavior: merge
+    literals:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - CORS_ORIGINS=https://dev.onecitizen.example.gov.gy
+      # Unauthenticated agent calls act as DEMO_USER_ID — convenient for curl, and
+      # acceptable only because this cluster holds no real citizen data.
+      - AUTH_REQUIRED=false
+      - DEMO_USER_ID=idn_citizen_1
+
+patches:
+  # One replica each: dev capacity, not availability.
+  - target:
+      kind: Deployment
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Ingress
+      name: onecitizen
+    patch: |
+      - op: replace
+        path: /spec/rules/0/host
+        value: dev.onecitizen.example.gov.gy
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: dev.onecitizen.example.gov.gy
+      - op: replace
+        path: /metadata/annotations/cert-manager.io~1cluster-issuer
+        value: letsencrypt-staging

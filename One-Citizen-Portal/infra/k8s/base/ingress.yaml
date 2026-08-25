@@ -1,0 +1,41 @@
+# Single entry point. Everything goes to the frontend Service, whose nginx serves the SPA
+# and proxies /api on to the API — so the browser only ever talks to one origin and there
+# is no CORS surface in production.
+#
+# Annotations below target ingress-nginx. On another controller (Traefik, AWS ALB, GKE)
+# the equivalents differ — the SSE ones especially, which are not optional.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: onecitizen
+  annotations:
+    # ── SSE / AG-UI streaming ────────────────────────────────────────────────
+    # Without buffering disabled at the ingress, agent responses are held until the run
+    # finishes and the assistant appears frozen. This is the single most common cause of
+    # "streaming works locally but not in the cluster".
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+
+    # Keep in step with backend MAX_UPLOAD_MB (document uploads).
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - onecitizendev.ksquare.local
+      secretName: onecitizen-tls
+  rules:
+    - host: onecitizendev.ksquare.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

@@ -1,0 +1,21 @@
+# Build context for service/Dockerfile (the agent service builds from service/ alone).
+
+# Secrets — supplied at runtime by the orchestrator, never baked in.
+.env
+.env.*
+!.env.example
+
+# Recreated inside the image
+.venv
+**/__pycache__
+**/*.py[cod]
+
+# Tests and tooling caches
+tests
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Docs
+*.md
+!README.md

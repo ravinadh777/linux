@@ -1,0 +1,10 @@
+{
+  // Tailwind's at-rules (@tailwind, @apply, @layer) are unknown to the built-in CSS
+  // language server, which reports ~200 false warnings in src/index.css. PostCSS
+  // resolves them at build time, so this only silences IDE noise — it does not
+  // change what ships.
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "files.associations": { "*.css": "tailwindcss" }
+}

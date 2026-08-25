@@ -1,0 +1,141 @@
+# oneCitizen — full stack: Postgres + API + web + AskGov agent.
+#
+#   npm run docker:up      # start (detached)
+#   npm run docker:logs    # follow logs
+#   npm run docker:down    # stop
+#
+# Open http://localhost:8080. The web container proxies /api to the API, and the API
+# proxies /api/v1/agent/* on to the agent service — so only the web port is published.
+#
+# Secrets come from infra/docker/.env (gitignored; copy .env.example). Compose reads that
+# file automatically because it sits next to this compose file.
+#
+# NOTE: build contexts are the REPO ROOT for the Node images, because backend and frontend
+# both depend on the sibling shared/ package via file:../shared.
+
+name: onecitizen
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PGUSER:-onecitizen}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?PGPASSWORD is required — see infra/docker/.env.example}
+      POSTGRES_DB: ${PGDATABASE:-onecitizen}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # Published so you can attach psql/pgAdmin from the host. Bound to loopback only.
+    ports:
+      - "127.0.0.1:${PG_PUBLISH_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-onecitizen} -d ${PGDATABASE:-onecitizen}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *default-logging
+    networks: [onecitizen]
+
+  backend:
+    image: onecitizen/backend:${TAG:-dev}
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Same-origin through nginx, so no cross-origin browser traffic to allow.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required and MUST match the agent service}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-604800}
+
+      PERSISTENCE_DRIVER: postgres
+      DATA_DIR: /var/lib/onecitizen
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${PGUSER:-onecitizen}
+      PGPASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
+      PGDATABASE: ${PGDATABASE:-onecitizen}
+      PGSSL: "false"
+      DB_AUTO_MIGRATE: "true"
+      DB_SEED: "true"
+
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+      MOCK_INTEGRATIONS: ${MOCK_INTEGRATIONS:-true}
+
+      AGENT_ENABLED: "true"
+      AGENT_SERVICE_URL: http://askgov-agent:4100
+      AGENT_TIMEOUT_MS: ${AGENT_TIMEOUT_MS:-30000}
+    volumes:
+      # Uploaded documents live here under the json driver and must outlive the container.
+      - backend-data:/var/lib/onecitizen
+    logging: *default-logging
+    networks: [onecitizen]
+
+  askgov-agent:
+    image: onecitizen/askgov-agent:${TAG:-dev}
+    build:
+      context: ../../service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4100
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+
+      # MUST equal the backend's JWT_SECRET — the agent verifies the citizen's portal
+      # token with it. A mismatch surfaces as every agent call returning 401.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required and MUST match the backend}
+      JWT_ALG: HS256
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
+      DEMO_USER_ID: ${DEMO_USER_ID:-idn_citizen_1}
+
+      # Unset → the service runs its deterministic fallback agent, same event stream.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1024}
+
+      BACKEND_API_URL: http://backend:4000/api/v1
+      BACKEND_TIMEOUT: ${BACKEND_TIMEOUT:-6}
+    logging: *default-logging
+    networks: [onecitizen]
+
+  frontend:
+    image: onecitizen/frontend:${TAG:-dev}
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+      args:
+        # Relative base → served same-origin and proxied by this container's nginx.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_APP_NAME: ${VITE_APP_NAME:-oneCitizen}
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "${WEB_PUBLISH_PORT:-8080}:8080"
+    logging: *default-logging
+    networks: [onecitizen]
+
+volumes:
+  postgres-data:
+  backend-data:
+
+networks:
+  onecitizen:
+    driver: bridge

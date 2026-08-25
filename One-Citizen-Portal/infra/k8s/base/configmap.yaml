@@ -1,0 +1,40 @@
+# Non-secret configuration shared by the API and the agent service.
+# Anything sensitive belongs in secret.yaml instead.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: onecitizen-config
+data:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+
+  # Same-origin via the Ingress, so the browser makes no cross-origin API calls.
+  CORS_ORIGINS: "https://onecitizen.example.gov.gy"
+
+  PERSISTENCE_DRIVER: "postgres"
+  DATA_DIR: "/var/lib/onecitizen"
+  # In prod this points at a managed Postgres — patch it in the overlay. No Postgres
+  # workload is shipped in base; running your own database is a deliberate choice.
+  PGHOST: "postgres"
+  PGPORT: "5432"
+  PGDATABASE: "onecitizen"
+  PGSSL: "false"
+  DB_AUTO_MIGRATE: "true"
+  DB_SEED: "true"
+
+  MAX_UPLOAD_MB: "25"
+  MOCK_INTEGRATIONS: "true"
+
+  # In-cluster service DNS — the API proxies /api/v1/agent/* here. Identical to the
+  # compose value, because the k8s Services use the same names.
+  AGENT_ENABLED: "true"
+  AGENT_SERVICE_URL: "http://askgov-agent:4100"
+  AGENT_TIMEOUT_MS: "30000"
+
+  # Agent service
+  JWT_ALG: "HS256"
+  AUTH_REQUIRED: "true"
+  LLM_MODEL: "gpt-4o-mini"
+  LLM_MAX_TOKENS: "1024"
+  BACKEND_API_URL: "http://backend:4000/api/v1"
+  BACKEND_TIMEOUT: "6"

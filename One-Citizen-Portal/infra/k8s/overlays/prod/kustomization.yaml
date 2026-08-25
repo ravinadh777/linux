@@ -1,0 +1,72 @@
+# Production overlay — pinned image tags, higher replica counts, disruption budgets.
+#
+#   kubectl kustomize infra/k8s/overlays/prod    # ALWAYS render and read before applying
+#   kubectl apply -k infra/k8s/overlays/prod
+#
+# Deploying a new version means bumping newTag below (or `kustomize edit set image`) and
+# committing — never editing a live object with `kubectl edit`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: onecitizen-prod
+
+resources:
+  - ../../base
+  - namespace.yaml
+  - pdb.yaml
+  - hpa.yaml
+
+commonLabels:
+  app.kubernetes.io/environment: prod
+
+# Pin to immutable tags. `latest` in production makes rollbacks guesswork — replace these
+# with the release SHA your CI pushed (see .github/workflows/docker-publish.yml).
+images:
+  - name: onecitizen/backend
+    newName: ghcr.io/your-org/onecitizen-backend
+    newTag: "0.1.0"
+  - name: onecitizen/frontend
+    newName: ghcr.io/your-org/onecitizen-frontend
+    newTag: "0.1.0"
+  - name: onecitizen/askgov-agent
+    newName: ghcr.io/your-org/onecitizen-askgov-agent
+    newTag: "0.1.0"
+
+configMapGenerator:
+  - name: onecitizen-config
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - AUTH_REQUIRED=true
+      - CORS_ORIGINS=https://onecitizen.example.gov.gy
+      # Flip to false as each real integration (SMS, payments, AV, OCR) goes live.
+      - MOCK_INTEGRATIONS=true
+      # Managed Postgres — point at your instance and keep TLS on.
+      - PGHOST=onecitizen-prod.postgres.database.example.com
+      - PGSSL=true
+      # Schema changes should be a reviewed migration job, not a side effect of a rollout.
+      - DB_AUTO_MIGRATE=false
+
+patches:
+  - target:
+      kind: Deployment
+      name: onecitizen-backend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: onecitizen-askgov-agent
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: onecitizen-frontend
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3

@@ -1,0 +1,41 @@
+# Tooling config for the AskGov agent service.
+#
+# Dependencies stay in requirements.txt (the Dockerfile and bootstrap install from it) —
+# this file configures ruff and pytest only, so lint results are identical locally and in
+# CI instead of depending on whichever ruff defaults happen to ship.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".venv", "__pycache__"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes — undefined names, unused imports
+  "I",   # isort — import ordering
+  "B",   # flake8-bugbear — likely bugs
+  "UP",  # pyupgrade — modern syntax for the target version
+  "ASYNC", # flake8-async — blocking calls inside async defs
+]
+ignore = [
+  "E501",  # line length is formatter territory, not a lint error
+  "B008",  # FastAPI's Depends()/Query() in defaults is the documented idiom
+  # `class EventType(str, Enum)` in agui/events.py. StrEnum would be more modern, but the
+  # two differ in how members serialize, and these values go on the wire as AG-UI SSE
+  # event names — not worth risking the protocol for a style rule.
+  "UP042",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Re-exports for the public surface of each package.
+"app/__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --no-header"
+# service/tests/ currently holds request fixtures, not test modules. Until real tests land
+# there, `pytest` exits 5 (nothing collected) — which is a FAILURE, not a pass. That is why
+# CI runs an import + /health smoke check instead of pytest. Add the pytest step to
+# .github/workflows/ci.yml once there is something for it to collect.
